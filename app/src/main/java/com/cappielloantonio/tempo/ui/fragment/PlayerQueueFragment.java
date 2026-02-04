@@ -95,6 +95,8 @@ public class PlayerQueueFragment extends Fragment implements ClickCallback {
         fabDownloadAll.setOnClickListener(v -> handleDownloadAllClick());
         fabLoadQueue.setOnClickListener(v -> handleLoadQueueClick());
 
+        bind.queueToolbar.setNavigationOnClickListener(v -> handleNowPlayingClick());
+
         // Hide Load Queue FAB if sync is disabled
         if (!Preferences.isSyncronizationEnabled()) {
             fabLoadQueue.setVisibility(View.GONE);
@@ -444,6 +446,13 @@ public class PlayerQueueFragment extends Fragment implements ClickCallback {
         }
         
         toggleFabMenu();
+    }
+
+    private void handleNowPlayingClick() {
+        PlayerBottomSheetFragment playerBottomSheetFragment = (PlayerBottomSheetFragment) requireActivity().getSupportFragmentManager().findFragmentByTag("PlayerBottomSheet");
+        if (playerBottomSheetFragment != null) {
+            playerBottomSheetFragment.goBackToFirstPage();
+        }
     }
 
     private void handleLoadQueueClick() {

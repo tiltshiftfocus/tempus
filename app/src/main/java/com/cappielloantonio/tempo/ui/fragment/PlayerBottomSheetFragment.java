@@ -275,7 +275,7 @@ public class PlayerBottomSheetFragment extends Fragment {
     }
 
     public void goBackToFirstPage() {
-        bind.playerBodyLayout.playerBodyBottomSheetViewPager.setCurrentItem(0, false);
+        bind.playerBodyLayout.playerBodyBottomSheetViewPager.setCurrentItem(0, true);
         goToControllerPage();
     }
 
