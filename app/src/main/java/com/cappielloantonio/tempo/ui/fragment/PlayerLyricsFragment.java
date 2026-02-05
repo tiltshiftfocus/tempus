@@ -4,13 +4,13 @@ import android.annotation.SuppressLint;
 import android.content.ComponentName;
 import android.os.Bundle;
 import android.os.Handler;
+import android.os.Looper;
 import android.text.Layout;
 import android.text.Spannable;
 import android.text.SpannableString;
 import android.text.TextPaint;
 import android.text.method.LinkMovementMethod;
 import android.text.style.ClickableSpan;
-import android.text.style.ForegroundColorSpan;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -44,6 +44,8 @@ import java.util.List;
 @OptIn(markerClass = UnstableApi.class)
 public class PlayerLyricsFragment extends Fragment {
     private static final String TAG = "PlayerLyricsFragment";
+    private static final long OVERLAY_HIDE_DELAY = 2000;
+    private static final long OVERLAY_FADE_DURATION = 300;
 
     private InnerFragmentPlayerLyricsBinding bind;
     private PlayerBottomSheetViewModel playerBottomSheetViewModel;
@@ -55,6 +57,10 @@ public class PlayerLyricsFragment extends Fragment {
     private LyricsList currentLyricsList;
     private Integer lastLineIdx;
     private String currentDescription;
+
+    private Handler overlayHandler;
+    private Runnable overlayHideRunnable;
+    private boolean overlayVisible = true;
 
     @Override
     public View onCreateView(@NonNull LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
@@ -88,12 +94,14 @@ public class PlayerLyricsFragment extends Fragment {
         super.onResume();
         bindMediaController();
         requireActivity().getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+        showOverlayAndScheduleHide();
     }
 
     @Override
     public void onPause() {
         super.onPause();
         releaseHandler();
+        releaseOverlayHandler();
         if (!Preferences.isDisplayAlwaysOn()) {
             requireActivity().getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         }
@@ -116,8 +124,12 @@ public class PlayerLyricsFragment extends Fragment {
     }
 
     private void initOverlay() {
+        overlayHandler = new Handler(Looper.getMainLooper());
+        overlayHideRunnable = this::fadeOutOverlay;
+
         bind.syncLyricsTapButton.setOnClickListener(view -> {
             playerBottomSheetViewModel.changeSyncLyricsState();
+            showOverlayAndScheduleHide();
         });
 
         bind.downloadLyricsButton.setOnClickListener(view -> {
@@ -129,7 +141,73 @@ public class PlayerLyricsFragment extends Fragment {
                         Toast.LENGTH_SHORT
                 ).show();
             }
+            showOverlayAndScheduleHide();
         });
+
+    }
+
+    private void showOverlayAndScheduleHide() {
+        if (bind == null) return;
+
+        overlayHandler.removeCallbacks(overlayHideRunnable);
+
+        if (!overlayVisible) {
+            fadeInOverlay();
+        }
+
+        overlayHandler.postDelayed(overlayHideRunnable, OVERLAY_HIDE_DELAY);
+    }
+
+    private void fadeInOverlay() {
+        if (bind == null) return;
+        overlayVisible = true;
+
+        if (bind.syncLyricsTapButton.getVisibility() != View.GONE) {
+            bind.syncLyricsTapButton.setAlpha(0f);
+            bind.syncLyricsTapButton.setVisibility(View.VISIBLE);
+            bind.syncLyricsTapButton.animate()
+                    .alpha(0.7f)
+                    .setDuration(OVERLAY_FADE_DURATION)
+                    .start();
+        }
+        if (bind.downloadLyricsButton.getVisibility() != View.GONE) {
+            bind.downloadLyricsButton.setAlpha(0f);
+            bind.downloadLyricsButton.setVisibility(View.VISIBLE);
+            bind.downloadLyricsButton.animate()
+                    .alpha(0.7f)
+                    .setDuration(OVERLAY_FADE_DURATION)
+                    .start();
+        }
+    }
+
+    private void fadeOutOverlay() {
+        if (bind == null) return;
+        overlayVisible = false;
+
+        if (bind.syncLyricsTapButton.getVisibility() == View.VISIBLE) {
+            bind.syncLyricsTapButton.animate()
+                    .alpha(0f)
+                    .setDuration(OVERLAY_FADE_DURATION)
+                    .withEndAction(() -> {
+                        if (bind != null) bind.syncLyricsTapButton.setVisibility(View.INVISIBLE);
+                    })
+                    .start();
+        }
+        if (bind.downloadLyricsButton.getVisibility() == View.VISIBLE) {
+            bind.downloadLyricsButton.animate()
+                    .alpha(0f)
+                    .setDuration(OVERLAY_FADE_DURATION)
+                    .withEndAction(() -> {
+                        if (bind != null) bind.downloadLyricsButton.setVisibility(View.INVISIBLE);
+                    })
+                    .start();
+        }
+    }
+
+    private void releaseOverlayHandler() {
+        if (overlayHandler != null) {
+            overlayHandler.removeCallbacks(overlayHideRunnable);
+        }
     }
 
     private void initializeBrowser() {
@@ -206,6 +284,7 @@ public class PlayerLyricsFragment extends Fragment {
             bind.syncLyricsTapButton.setVisibility(View.VISIBLE);
             bind.downloadLyricsButton.setVisibility(View.VISIBLE);
             bind.downloadLyricsButton.setEnabled(true);
+            showOverlayAndScheduleHide();
         } else if (hasText(currentLyrics)) {
             bind.nowPlayingSongLyricsTextView.setText(MusicUtil.getReadableLyrics(currentLyrics));
             bind.nowPlayingSongLyricsTextView.setVisibility(View.VISIBLE);
@@ -214,6 +293,7 @@ public class PlayerLyricsFragment extends Fragment {
             bind.syncLyricsTapButton.setVisibility(View.GONE);
             bind.downloadLyricsButton.setVisibility(View.VISIBLE);
             bind.downloadLyricsButton.setEnabled(true);
+            showOverlayAndScheduleHide();
         } else if (hasText(currentDescription)) {
             bind.nowPlayingSongLyricsTextView.setText(MusicUtil.getReadableLyrics(currentDescription));
             bind.nowPlayingSongLyricsTextView.setVisibility(View.VISIBLE);
@@ -335,6 +415,7 @@ public class PlayerLyricsFragment extends Fragment {
                     public void onClick(@NonNull View view) {
                         // Seeking to 1ms after the actual start prevents scrolling / highlighting artifacts
                         mediaBrowser.seekTo(lineStart + 1);
+                        showOverlayAndScheduleHide();
                     }
 
                     @Override
